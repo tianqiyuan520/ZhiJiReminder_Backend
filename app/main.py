@@ -185,16 +185,26 @@ async def get_reminders(user_id: str):
         
         for row in reminders_data:
             reminder = dict(row)
-            # 计算剩余时间（天、小时、分钟）
+            # 计算剩余时间（天、小时、分钟）- 使用北京时间（UTC+8）
             if reminder['deadline'] and reminder['status'] == 'pending':
                 try:
                     deadline_str = reminder['deadline']
-                    # 解析截止时间
+                    # 解析截止时间，假设输入的是北京时间
                     deadline = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M')
-                    now = datetime.now()
+                    
+                    # 获取当前北京时间（UTC+8）
+                    import pytz
+                    from datetime import datetime, timezone, timedelta
+                    
+                    # 创建北京时间时区
+                    beijing_tz = pytz.timezone('Asia/Shanghai')
+                    now_beijing = datetime.now(beijing_tz)
+                    
+                    # 将deadline转换为带有时区信息的datetime（假设是北京时间）
+                    deadline_beijing = beijing_tz.localize(deadline)
                     
                     # 直接比较datetime对象
-                    if deadline <= now:
+                    if deadline_beijing <= now_beijing:
                         # 已过期
                         reminder['days_left'] = 0
                         reminder['hours_left'] = 0
@@ -202,7 +212,7 @@ async def get_reminders(user_id: str):
                         reminder['time_left_display'] = "已过期"
                     else:
                         # 计算时间差
-                        diff = deadline - now
+                        diff = deadline_beijing - now_beijing
                         total_seconds = int(diff.total_seconds())
                         
                         # 计算天、小时、分钟
@@ -227,10 +237,36 @@ async def get_reminders(user_id: str):
                         
                 except Exception as e:
                     logger.error(f"计算剩余时间错误: {e}, 截止时间字符串: {reminder.get('deadline', '无')}")
-                    reminder['days_left'] = 0
-                    reminder['hours_left'] = 0
-                    reminder['minutes_left'] = 0
-                    reminder['time_left_display'] = "时间计算错误"
+                    # 如果时区计算失败，使用简单计算（假设本地时间就是北京时间）
+                    try:
+                        # 重新导入datetime以避免命名冲突
+                        from datetime import datetime as dt
+                        deadline = dt.strptime(deadline_str, '%Y-%m-%d %H:%M')
+                        now = dt.now()
+                        diff = deadline - now
+                        total_seconds = int(diff.total_seconds()) if diff.total_seconds() > 0 else 0
+                        
+                        days = total_seconds // (24 * 3600)
+                        hours = (total_seconds % (24 * 3600)) // 3600
+                        minutes = (total_seconds % 3600) // 60
+                        
+                        reminder['days_left'] = days
+                        reminder['hours_left'] = hours
+                        reminder['minutes_left'] = minutes
+                        
+                        if days > 0:
+                            reminder['time_left_display'] = f"{days}天{hours}小时{minutes}分钟"
+                        elif hours > 0:
+                            reminder['time_left_display'] = f"{hours}小时{minutes}分钟"
+                        elif minutes > 0:
+                            reminder['time_left_display'] = f"{minutes}分钟"
+                        else:
+                            reminder['time_left_display'] = "已过期" if total_seconds <= 0 else "即将到期"
+                    except:
+                        reminder['days_left'] = 0
+                        reminder['hours_left'] = 0
+                        reminder['minutes_left'] = 0
+                        reminder['time_left_display'] = "时间计算错误"
             else:
                 # 已完成或没有截止时间的任务
                 reminder['days_left'] = 0
