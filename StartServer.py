@@ -70,7 +70,7 @@ def start_server(port=8000, reload=False):
     cmd = [
         sys.executable, '-m', 'uvicorn',
         'app.main:app',
-        '--host', '0.0.0.0',
+        '--host', 'localhost',
         '--port', str(port)
     ]
     

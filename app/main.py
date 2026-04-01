@@ -13,8 +13,17 @@ from app.database import db_config, init_database, get_db, close_db
 from app.admin import router as admin_router
 
 # 配置日志
-logging.basicConfig(level=logging.INFO)
+import os
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
+# 减少asyncio连接错误的日志噪音
+asyncio_logger = logging.getLogger('asyncio')
+asyncio_logger.setLevel(logging.WARNING)
 
 app = FastAPI(title="智记侠作业提醒API")
 

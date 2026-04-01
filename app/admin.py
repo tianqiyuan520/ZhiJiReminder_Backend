@@ -324,20 +324,20 @@ async def database_info(
         
         # 获取每个表的行数和列信息
         for table in tables:
-            table_name = table["name"]
-            count_query = f"SELECT COUNT(*) as count FROM {table_name}"
+            current_table_name = table["name"]
+            count_query = f"SELECT COUNT(*) as count FROM {current_table_name}"
             try:
                 count_result = db_config.execute_query(count_query)
                 row_count = count_result[0].get("count", 0) if count_result else 0
                 
                 # 获取表结构信息
                 if db_config.db_type == "sqlite":
-                    structure_query = f"PRAGMA table_info({table_name})"
+                    structure_query = f"PRAGMA table_info({current_table_name})"
                 else:
                     structure_query = f"""
                     SELECT column_name, data_type, is_nullable
                     FROM information_schema.columns
-                    WHERE table_name = '{table_name}'
+                    WHERE table_name = '{current_table_name}'
                     ORDER BY ordinal_position
                     """
                 
@@ -358,15 +358,15 @@ async def database_info(
                         })
                 
                 db_info["tables"].append({
-                    "name": table_name,
+                    "name": current_table_name,
                     "row_count": row_count,
                     "columns": columns
                 })
                 
                 # 如果请求查看特定表的数据
-                if show_data and table_name == table_name:
+                if show_data and table_name == current_table_name:
                     try:
-                        data_query = f"SELECT * FROM {table_name} LIMIT %s"
+                        data_query = f"SELECT * FROM {current_table_name} LIMIT %s"
                         if db_config.db_type != "postgresql":
                             data_query = data_query.replace("%s", "?")
                         
@@ -374,14 +374,14 @@ async def database_info(
                         db_info["table_data"] = table_data
                         db_info["data_columns"] = list(table_data[0].keys()) if table_data else []
                     except Exception as data_error:
-                        logger.warning(f"获取表 {table_name} 数据失败: {data_error}")
+                        logger.warning(f"获取表 {current_table_name} 数据失败: {data_error}")
                         db_info["table_data"] = []
                         db_info["data_error"] = str(data_error)
                         
             except Exception as e:
-                logger.warning(f"获取表 {table_name} 信息失败: {e}")
+                logger.warning(f"获取表 {current_table_name} 信息失败: {e}")
                 db_info["tables"].append({
-                    "name": table_name,
+                    "name": current_table_name,
                     "row_count": "未知",
                     "columns": []
                 })

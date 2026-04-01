@@ -19,17 +19,24 @@ class WeChatSubscribeMessage:
     """微信订阅消息处理类"""
     
     def __init__(self):
-        # 微信小程序配置（实际使用时需要从环境变量获取）
-        self.app_id = "wx1234567890abcdef"  # 替换为实际AppID
-        self.app_secret = "your_app_secret_here"  # 替换为实际AppSecret
+        import os
+        
+        # 微信小程序配置（从环境变量获取）
+        self.app_id = os.getenv("WECHAT_APP_ID", "wx1234567890abcdef")  # 微信小程序AppID
+        self.app_secret = os.getenv("WECHAT_APP_SECRET", "your_app_secret_here")  # 微信小程序AppSecret
         self.access_token = None
         self.token_expire_time = 0
         
-        # 订阅消息模板ID（需要在实际微信公众平台配置）
+        # 订阅消息模板ID（从环境变量获取）
         self.template_ids = {
-            "reminder_due": "TEMPLATE_ID_FOR_REMINDER_DUE",  # 提醒到期模板
-            "reminder_urgent": "TEMPLATE_ID_FOR_REMINDER_URGENT",  # 紧急提醒模板
+            "reminder_due": os.getenv("WECHAT_TEMPLATE_REMINDER_DUE", "SmeggOOCYnQ8841WNG5w9eeiZWYGMzGfOBCEEJpH9_8"),
+            "reminder_urgent": os.getenv("WECHAT_TEMPLATE_REMINDER_URGENT", "SmeggOOCYnQ8841WNG5w9eeiZWYGMzGfOBCEEJpH9_8"),
         }
+        
+        # 检查配置
+        if self.app_id == "wx1234567890abcdef" or self.app_secret == "your_app_secret_here":
+            logger.warning("微信配置未设置，订阅消息功能将无法正常工作")
+            logger.warning("请设置环境变量：WECHAT_APP_ID, WECHAT_APP_SECRET")
     
     def get_access_token(self) -> Optional[str]:
         """获取微信Access Token"""
