@@ -35,13 +35,28 @@ class DatabaseConfig:
     
     def get_connection(self):
         """获取数据库连接"""
-        if self._connection is None:
-            self._connection = self._create_connection()
-        elif self.db_type == "postgresql" and self._connection.closed:
-            # PostgreSQL连接已关闭，重新创建
-            self._connection = self._create_connection()
-        # SQLite连接没有closed属性，直接返回
-        return self._connection
+        # 对于SQLite，每个线程需要自己的连接
+        if self.db_type == "sqlite":
+            # 为当前线程创建连接
+            import threading
+            thread_id = threading.get_ident()
+            
+            # 检查是否已经有当前线程的连接
+            if not hasattr(self, '_thread_connections'):
+                self._thread_connections = {}
+            
+            if thread_id not in self._thread_connections:
+                self._thread_connections[thread_id] = self._create_sqlite_connection()
+            
+            return self._thread_connections[thread_id]
+        else:
+            # PostgreSQL使用共享连接
+            if self._connection is None:
+                self._connection = self._create_connection()
+            elif self._connection.closed:
+                # PostgreSQL连接已关闭，重新创建
+                self._connection = self._create_connection()
+            return self._connection
     
     def _create_connection(self):
         """创建数据库连接"""
@@ -179,6 +194,7 @@ def init_database():
         difficulty TEXT DEFAULT '中',
         status TEXT DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_notified TEXT,
         FOREIGN KEY (user_id) REFERENCES users (user_id)
     )
     """
@@ -191,6 +207,29 @@ def init_database():
         # 创建提醒表
         db_config.execute_query(create_reminders_table)
         logger.info("提醒表创建/检查完成")
+        
+        # 创建默认用户 "test"（如果不存在）
+        create_default_user_query = """
+        INSERT INTO users (user_id, openid, nick_name, avatar_url)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (user_id) DO NOTHING
+        """
+        
+        if db_config.db_type != "postgresql":
+            create_default_user_query = create_default_user_query.replace("%s", "?")
+        
+        default_user_params = (
+            "test",
+            "test_openid",
+            "测试用户",
+            ""
+        )
+        
+        try:
+            db_config.execute_query(create_default_user_query, default_user_params)
+            logger.info("默认用户 'test' 创建/检查完成")
+        except Exception as user_error:
+            logger.warning(f"创建默认用户失败: {user_error}")
         
         logger.info("数据库初始化完成")
     except Exception as e:

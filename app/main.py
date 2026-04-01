@@ -10,6 +10,7 @@ from app.models import HomeworkInfo, SaveReminderRequest, UserInfo, ImageUploadR
 from app.ocr import ocr_image
 from app.llm import parse_homework_info, analyze_homework as analyze_homework_ai
 from app.database import db_config, init_database, get_db, close_db
+from app.admin import router as admin_router
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +30,9 @@ app.add_middleware(
 
 # 初始化数据库
 init_database()
+
+# 注册管理路由
+app.include_router(admin_router)
 
 @app.post("/api/upload")
 async def upload_homework_base64(request: dict):
@@ -423,3 +427,70 @@ async def get_user(user_id: str):
 @app.get("/")
 async def get_hello():
     return "智记侠API服务运行中"
+
+
+# 导入微信订阅消息模块
+from app.wechat import check_due_reminders, add_last_notified_column
+
+# 添加last_notified列（如果不存在）
+add_last_notified_column()
+
+@app.get("/api/check-due-reminders")
+async def api_check_due_reminders():
+    """手动触发检查即将到期的提醒并发送订阅消息"""
+    try:
+        sent_count = check_due_reminders()
+        return {
+            "success": True,
+            "message": f"已检查并发送 {sent_count} 条订阅消息",
+            "sent_count": sent_count
+        }
+    except Exception as e:
+        logger.error(f"检查到期提醒失败: {e}")
+        raise HTTPException(500, f"检查失败: {str(e)}")
+
+
+@app.post("/api/subscribe-message/test")
+async def test_subscribe_message(user_id: str):
+    """测试订阅消息发送功能"""
+    try:
+        from app.wechat import wechat_message
+        
+        # 获取用户信息
+        query = "SELECT openid FROM users WHERE user_id = %s"
+        users_data = db_config.execute_query(query, (user_id,))
+        
+        if not users_data or not users_data[0].get("openid"):
+            raise HTTPException(404, "用户不存在或没有openid")
+        
+        openid = users_data[0]["openid"]
+        
+        # 测试消息数据
+        test_data = {
+            "thing1": {"value": "测试课程"},
+            "thing2": {"value": "测试作业内容"},
+            "time3": {"value": "2026-04-01 23:59"},
+            "thing4": {"value": "测试紧急程度"}
+        }
+        
+        # 发送测试消息
+        success = wechat_message.send_subscribe_message(
+            openid, 
+            wechat_message.template_ids["reminder_due"], 
+            test_data
+        )
+        
+        if success:
+            return {
+                "success": True,
+                "message": "测试订阅消息发送成功"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "测试订阅消息发送失败"
+            }
+            
+    except Exception as e:
+        logger.error(f"测试订阅消息失败: {e}")
+        raise HTTPException(500, f"测试失败: {str(e)}")

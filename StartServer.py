@@ -89,6 +89,21 @@ def start_server(port=8000, reload=False):
         print(f"API地址: http://localhost:{port}")
         print(f"API文档: http://localhost:{port}/docs")
         print(f"首页: http://localhost:{port}/")
+        
+        # 启动定时任务调度器
+        print("\n启动定时任务调度器...")
+        try:
+            # 导入并启动调度器
+            sys.path.insert(0, os.getcwd())
+            from app.scheduler import init_scheduler
+            scheduler = init_scheduler()
+            print("✓ 定时任务调度器已启动")
+            print(f"  检查间隔: {scheduler.check_interval_minutes}分钟")
+            print(f"  定时检查即将到期的提醒并发送微信订阅消息")
+        except Exception as e:
+            print(f"✗ 启动定时任务调度器失败: {e}")
+            print("  定时任务功能将不可用")
+        
         print("\n按 Ctrl+C 停止服务器")
         print("-" * 60)
         
