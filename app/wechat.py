@@ -181,23 +181,23 @@ def check_due_reminders():
         
         # 构建查询语句（根据列是否存在）
         if last_notified_exists:
-            # 有last_notified列的查询 - 只查询当前时间已到期的提醒
+            # 有last_notified列的查询 - 查询所有已到期的提醒
             base_query = """
             SELECT r.id, r.user_id, r.course, r.content, r.deadline, u.openid
             FROM reminders r
             JOIN users u ON r.user_id = u.user_id
             WHERE r.status = 'pending' 
-            AND r.deadline = %s  -- 只检查当前时间
+            AND r.deadline <= %s  -- 检查所有已到期的提醒
             AND (r.last_notified IS NULL OR r.last_notified < %s)
             """
         else:
-            # 没有last_notified列的简化查询 - 只查询当前时间已到期的提醒
+            # 没有last_notified列的简化查询 - 查询所有已到期的提醒
             base_query = """
             SELECT r.id, r.user_id, r.course, r.content, r.deadline, u.openid
             FROM reminders r
             JOIN users u ON r.user_id = u.user_id
             WHERE r.status = 'pending' 
-            AND r.deadline = %s  -- 只检查当前时间
+            AND r.deadline <= %s  -- 检查所有已到期的提醒
             """
         
         # 格式化时间字符串

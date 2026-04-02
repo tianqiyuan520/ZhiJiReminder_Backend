@@ -530,6 +530,28 @@ async def complete_reminder(reminder_id: str):
         logger.error(f"完成任务失败: {e}")
         raise HTTPException(500, f"更新失败: {str(e)}")
 
+@app.delete("/api/reminders/all")
+async def delete_all_reminders(user_id: str):
+    """删除用户的所有任务"""
+    logger.info(f"收到删除所有任务请求，用户ID: {user_id}")
+    
+    try:
+        # 直接执行删除，不检查是否存在
+        query = "DELETE FROM reminders WHERE user_id = %s"
+        deleted_count = db_config.execute_query(query, (user_id,))
+        logger.info(f"删除用户 {user_id} 的所有任务完成，共 {deleted_count} 条")
+        
+        # 总是返回成功
+        return {
+            "success": True,
+            "message": f"已删除{deleted_count}个任务",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        logger.error(f"删除所有任务失败: {e}", exc_info=True)
+        # 返回错误，让前端知道删除失败
+        raise HTTPException(500, f"删除失败: {str(e)}")
+
 @app.delete("/api/reminders/{reminder_id}")
 async def delete_reminder(reminder_id: str):
     """删除提醒"""
@@ -555,33 +577,6 @@ async def delete_reminder(reminder_id: str):
     except Exception as e:
         logger.error(f"删除任务失败: {e}")
         raise HTTPException(500, f"删除失败: {str(e)}")
-
-@app.delete("/api/reminders/all")
-async def delete_all_reminders(user_id: str):
-    """删除用户的所有任务"""
-    logger.info(f"收到删除所有任务请求，用户ID: {user_id}")
-    
-    try:
-        # 直接执行删除，不检查是否存在
-        query = "DELETE FROM reminders WHERE user_id = %s"
-        deleted_count = db_config.execute_query(query, (user_id,))
-        logger.info(f"删除用户 {user_id} 的所有任务完成，共 {deleted_count} 条")
-        
-        # 总是返回成功
-        return {
-            "success": True,
-            "message": f"已删除{deleted_count}个任务",
-            "deleted_count": deleted_count
-        }
-    except Exception as e:
-        logger.error(f"删除所有任务失败: {e}", exc_info=True)
-        # 即使出错也返回成功，避免前端显示错误
-        return {
-            "success": True,
-            "message": "删除操作已完成",
-            "deleted_count": 0,
-            "error": str(e)
-        }
 
 @app.delete("/api/reminders/completed")
 async def delete_completed_reminders(user_id: str):
