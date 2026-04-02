@@ -57,7 +57,7 @@ app.include_router(admin_router)
 
 @app.post("/api/upload")
 async def upload_homework_base64(request: dict):
-    """上传截图（base64格式），OCR识别 + 大模型解析，返回作业信息"""
+    """上传截图（base64格式），OCR识别 + 大模型解析，返回作业信息（用于识别按钮）"""
     try:
         import base64
         import asyncio
@@ -156,6 +156,65 @@ async def upload_homework_file(file: UploadFile = File(...)):
         }
     except Exception as e:
         raise HTTPException(500, f"处理失败: {str(e)}")
+
+@app.post("/api/upload-image-only")
+async def upload_image_only(request: dict):
+    """只上传图片（不进行OCR识别），返回图片URL（用于保存按钮）"""
+    try:
+        import base64
+        import uuid
+        import os
+        
+        # 获取base64图片数据
+        image_base64 = request.get("image", "")
+        if not image_base64:
+            raise HTTPException(400, "图片数据为空")
+        
+        # 检查图片大小（限制为2MB）
+        if len(image_base64) > 3 * 1024 * 1024:  # 3MB base64编码后大约4MB
+            raise HTTPException(400, "图片太大，请压缩后重试（建议小于2MB）")
+        
+        # 解码base64图片
+        try:
+            image_data = base64.b64decode(image_base64)
+            logger.info(f"图片解码成功，大小: {len(image_data)} bytes")
+        except Exception as e:
+            logger.error(f"图片数据格式错误: {e}")
+            raise HTTPException(400, f"图片数据格式错误: {str(e)}")
+        
+        # 生成唯一的文件名
+        image_id = str(uuid.uuid4())
+        image_filename = f"{image_id}.jpg"
+        
+        # 保存图片到本地（临时方案，生产环境应该使用云存储）
+        # 创建images目录（如果不存在）
+        images_dir = "images"
+        if not os.path.exists(images_dir):
+            os.makedirs(images_dir)
+        
+        # 保存图片文件
+        image_path = os.path.join(images_dir, image_filename)
+        with open(image_path, "wb") as f:
+            f.write(image_data)
+        
+        logger.info(f"图片保存成功: {image_path}")
+        
+        # 返回图片URL（这里使用相对路径，生产环境应该使用绝对URL）
+        # 注意：实际部署时需要配置正确的图片URL前缀
+        image_url = f"/images/{image_filename}"
+        
+        return {
+            "success": True,
+            "data": {
+                "image_url": image_url,
+                "message": "图片上传成功"
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"上传图片失败: {e}", exc_info=True)
+        raise HTTPException(500, f"上传图片失败: {str(e)}")
 
 @app.post("/api/analyze")
 async def analyze_homework(homework: HomeworkInfo):
