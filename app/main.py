@@ -132,6 +132,9 @@ async def upload_homework_base64(request: dict):
             }
             logger.info(f"使用OCR结果作为回退: {info}")
         
+        # 重要：这个端点不创建提醒，只返回识别结果
+        # 前端应该使用返回的信息调用 /api/reminder 来创建提醒
+        
         return {
             "success": True,
             "data": {
@@ -239,7 +242,7 @@ async def upload_image_only(request_data: dict):
             if match:
                 image_type = match.group(1)
         
-        # 创建提醒记录（只包含图片数据，其他字段为默认值）
+        # 创建提醒记录（只包含图片数据，课程和内容为空）
         query = """
         INSERT INTO reminders (
             id, user_id, course, content, start_time, deadline, 
@@ -250,8 +253,8 @@ async def upload_image_only(request_data: dict):
         params = (
             reminder_id,
             user_id,
-            "待填写课程",
-            "待填写作业内容",
+            "",  # 空课程，而不是"待填写课程"
+            "",  # 空内容，而不是"待填写作业内容"
             "",
             "未指定",
             "中",
@@ -345,7 +348,34 @@ async def create_or_update_reminder(req: SaveReminderRequest):
     image_type = None
     
     # 如果请求中包含图片数据，则保存到数据库
-    if hasattr(req, 'image_data') and req.image_data:
+    if req.image:
+        import base64
+        import re
+        try:
+            # 处理data URL格式
+            image_str = req.image
+            if image_str.startswith("data:image/"):
+                # 提取base64部分（data:image/png;base64,后面的部分）
+                match = re.match(r'data:image/[^;]+;base64,(.+)', image_str)
+                if match:
+                    image_str = match.group(1)
+            
+            # 解码base64
+            image_data = base64.b64decode(image_str)
+            logger.info(f"从请求中解码图片成功，大小: {len(image_data)} bytes")
+            
+            # 检测图片类型
+            image_type = "image/jpeg"  # 默认类型
+            if req.image.startswith("data:image/"):
+                # 从原始data URL中提取类型
+                match = re.match(r'data:(image/[^;]+)', req.image)
+                if match:
+                    image_type = match.group(1)
+        except Exception as e:
+            logger.error(f"解码图片数据失败: {e}")
+            # 继续处理，图片不是必需的
+    elif hasattr(req, 'image_data') and req.image_data:
+        # 兼容旧版本
         image_data = req.image_data
         image_type = getattr(req, 'image_type', 'image/jpeg')
     
@@ -986,7 +1016,7 @@ async def upload_image_binary(request_data: dict):
             if match:
                 image_type = match.group(1)
         
-        # 创建提醒记录（只包含图片数据，其他字段为默认值）
+        # 创建提醒记录（只包含图片数据，课程和内容为空）
         query = """
         INSERT INTO reminders (
             id, user_id, course, content, start_time, deadline, 
@@ -997,8 +1027,8 @@ async def upload_image_binary(request_data: dict):
         params = (
             reminder_id,
             user_id,
-            "待填写课程",
-            "待填写作业内容",
+            "",  # 空课程，而不是"待填写课程"
+            "",  # 空内容，而不是"待填写作业内容"
             "",
             "未指定",
             "中",
