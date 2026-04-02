@@ -75,9 +75,8 @@ async def upload_homework_base64(request: dict):
         if not image_base64:
             raise HTTPException(400, "图片数据为空")
         
-        # 检查图片大小（限制为2MB）
-        if len(image_base64) > 3 * 1024 * 1024:  # 3MB base64编码后大约4MB
-            raise HTTPException(400, "图片太大，请压缩后重试（建议小于2MB）")
+        # 移除文件大小限制（根据用户要求）
+        # 注意：大文件可能会影响性能和存储空间
         
         # 解码base64图片
         try:
@@ -178,9 +177,8 @@ async def upload_image_only(request: dict):
         if not image_base64:
             raise HTTPException(400, "图片数据为空")
         
-        # 检查图片大小（限制为2MB）
-        if len(image_base64) > 3 * 1024 * 1024:  # 3MB base64编码后大约4MB
-            raise HTTPException(400, "图片太大，请压缩后重试（建议小于2MB）")
+        # 移除文件大小限制（根据用户要求）
+        # 注意：大文件可能会影响性能和存储空间
         
         # 解码base64图片
         try:
@@ -207,9 +205,10 @@ async def upload_image_only(request: dict):
         
         logger.info(f"图片保存成功: {image_path}")
         
-        # 返回图片URL（这里使用相对路径，生产环境应该使用绝对URL）
-        # 注意：实际部署时需要配置正确的图片URL前缀
-        image_url = f"/images/{image_filename}"
+        # 返回完整的图片URL（包含服务器地址）
+        # 注意：这里使用localhost:8002，生产环境应该使用实际域名
+        base_url = "http://localhost:8002"
+        image_url = f"{base_url}/images/{image_filename}"
         
         return {
             "success": True,
