@@ -206,37 +206,30 @@ async def upload_image_only(request_data: dict):
         
         logger.info(f"图片保存成功: {image_path}")
         
-        # 动态生成图片URL - 根据请求的host
-        # 注意：这里需要从请求头中获取referer或origin来判断前端来源
-        # 但由于FastAPI的限制，我们无法直接获取请求对象
-        # 使用环境变量和配置的方式
+        # 动态生成图片URL - 简化逻辑，根据环境变量决定
+        # 优先使用环境变量中的FRONTEND_BASE_URL，如果没有则根据RENDER环境变量判断
+        base_url = os.getenv("FRONTEND_BASE_URL", "")
         
-        # 方法1：使用环境变量
-        render_env = os.getenv("RENDER", "false").lower() == "true"
-        
-        if render_env:
-            # Render生产环境
-            base_url = "https://zhijireminderbackend.onrender.com"
-        else:
-            # 检查前端配置
-            # 如果前端配置了localhost，则使用localhost
-            # 否则使用Render.com
-            
-            # 从请求数据中获取用户ID，检查是否有配置信息
-            user_id = request_data.get("user_id", "")
-            
-            # 这里可以添加逻辑来检查用户配置
-            # 暂时使用环境变量判断
-            
-            # 检查是否有前端配置信息
-            frontend_config = os.getenv("FRONTEND_BASE_URL", "")
-            if frontend_config:
-                base_url = frontend_config
+        if not base_url:
+            # 如果没有设置FRONTEND_BASE_URL，根据RENDER环境变量判断
+            render_env = os.getenv("RENDER", "false").lower() == "true"
+            if render_env:
+                base_url = "https://zhijireminderbackend.onrender.com"
+                logger.info(f"Render生产环境，使用生产URL: {base_url}")
             else:
-                # 默认使用localhost
                 base_url = "http://localhost:8002"
+                logger.info(f"本地开发环境，使用本地URL: {base_url}")
+        else:
+            logger.info(f"使用环境变量中的FRONTEND_BASE_URL: {base_url}")
         
-        image_url = f"{base_url}/images/{image_filename}"
+        # 确保URL以/images/结尾
+        image_url = f"{base_url.rstrip('/')}/images/{image_filename}"
+        
+        # 记录生成的URL用于调试
+        logger.info(f"生成的图片URL: {image_url}")
+        logger.info(f"图片文件路径: {image_path}")
+        logger.info(f"图片文件存在: {os.path.exists(image_path)}")
+        logger.info(f"图片文件大小: {os.path.getsize(image_path) if os.path.exists(image_path) else '文件不存在'} bytes")
         
         logger.info(f"生成的图片URL: {image_url}")
         
