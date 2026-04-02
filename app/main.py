@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import uuid
 from datetime import datetime
 import json
@@ -48,6 +49,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 添加静态文件服务（用于访问上传的图片）
+# 注意：images目录必须存在
+images_dir = "images"
+if not os.path.exists(images_dir):
+    os.makedirs(images_dir)
+app.mount("/images", StaticFiles(directory=images_dir), name="images")
 
 # 初始化数据库
 init_database()
