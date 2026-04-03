@@ -351,6 +351,12 @@ async def create_or_update_reminder(req: SaveReminderRequest):
         
         # 如果有图片数据，更新图片字段
         if image_data is not None and len(image_data) > 0:
+            # 生成带时间戳的图片URL
+            base_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:8002")
+            import time
+            timestamp = int(time.time())
+            image_url_with_timestamp = f"{base_url.rstrip('/')}/api/images/{req.reminder_id}?t={timestamp}"
+            
             # 更新提醒信息（包括图片）
             update_query = """
             UPDATE reminders 
@@ -371,12 +377,12 @@ async def create_or_update_reminder(req: SaveReminderRequest):
                 req.homework.start_time,
                 req.homework.deadline,
                 req.homework.difficulty,
-                req.homework.image_url if hasattr(req.homework, 'image_url') else None,
+                image_url_with_timestamp,  # 使用带时间戳的URL
                 image_data,
                 image_type,
                 req.reminder_id
             )
-            logger.info(f"更新提醒（包含图片）: 图片大小={len(image_data)} bytes, 将执行SQL更新")
+            logger.info(f"更新提醒（包含图片）: 图片大小={len(image_data)} bytes, 图片URL={image_url_with_timestamp}")
         else:
             # 更新提醒信息（不包括图片）
             update_query = """
@@ -487,14 +493,29 @@ async def get_reminders(user_id: str):
             }
             
             # 处理图片URL：如果有image_data，则使用API URL；否则使用原有的image_url
-            if row.get('image_data'):
+            # 调试：检查image_data字段
+            image_data_value = row.get('image_data')
+            logger.warning(f"DEBUG: 任务 {reminder['id']} - image_data类型: {type(image_data_value)}, 值: {image_data_value}")
+            
+            if image_data_value:
                 # 如果有图片数据，使用API URL
                 # 返回完整的URL，包括协议、主机和端口
                 base_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:8002")
-                reminder['image_url'] = f"{base_url.rstrip('/')}/api/images/{reminder['id']}"
+                
+                # 添加时间戳参数防止缓存
+                import time
+                timestamp = int(time.time())
+                
+                new_image_url = f"{base_url.rstrip('/')}/api/images/{reminder['id']}?t={timestamp}"
+                # 使用logger.warning确保日志显示
+                logger.warning(f"生成带时间戳的图片URL: {new_image_url} (原始image_url: {reminder.get('image_url')})")
+                reminder['image_url'] = new_image_url
             elif not reminder.get('image_url'):
                 # 既没有image_data也没有image_url
+                logger.warning(f"任务 {reminder['id']} 没有图片数据")
                 reminder['image_url'] = None
+            else:
+                logger.warning(f"任务 {reminder['id']} 使用原有的image_url: {reminder.get('image_url')}")
             
             # 计算剩余时间（天、小时、分钟）- 使用北京时间（UTC+8）
             if reminder['deadline'] and reminder['deadline'] != '未指定' and reminder['status'] == 'pending':
@@ -606,27 +627,96 @@ async def update_reminder(reminder_id: str, req: SaveReminderRequest):
         logger.error(f"检查提醒存在失败: {e}")
         raise HTTPException(500, f"检查失败: {str(e)}")
     
-    # 更新提醒信息
-    update_query = """
-    UPDATE reminders 
-    SET course = %s, 
-        content = %s, 
-        start_time = %s, 
-        deadline = %s, 
-        difficulty = %s,
-        image_url = %s
-    WHERE id = %s
-    """
+    # 检查是否有图片数据需要保存
+    image_data = None
+    image_type = None
     
-    params = (
-        req.homework.course,
-        req.homework.content,
-        req.homework.start_time,
-        req.homework.deadline,
-        req.homework.difficulty,
-        req.homework.image_url if hasattr(req.homework, 'image_url') else None,
-        reminder_id
-    )
+    # 如果请求中包含图片数据，则保存到数据库
+    if req.image:
+        import base64
+        import re
+        try:
+            # 处理data URL格式
+            image_str = req.image
+            if image_str.startswith("data:image/"):
+                # 提取base64部分（data:image/png;base64,后面的部分）
+                match = re.match(r'data:image/[^;]+;base64,(.+)', image_str)
+                if match:
+                    image_str = match.group(1)
+            
+            # 解码base64
+            image_data = base64.b64decode(image_str)
+            logger.info(f"从请求中解码图片成功，大小: {len(image_data)} bytes")
+            
+            # 检测图片类型
+            image_type = "image/jpeg"  # 默认类型
+            if req.image.startswith("data:image/"):
+                # 从原始data URL中提取类型
+                match = re.match(r'data:(image/[^;]+)', req.image)
+                if match:
+                    image_type = match.group(1)
+        except Exception as e:
+            logger.error(f"解码图片数据失败: {e}")
+            # 继续处理，图片不是必需的
+    elif hasattr(req, 'image_data') and req.image_data:
+        # 兼容旧版本
+        image_data = req.image_data
+        image_type = getattr(req, 'image_type', 'image/jpeg')
+    
+    # 调试日志
+    logger.info(f"图片数据处理结果: image_data={'有数据' if image_data else '无数据'}, image_type={image_type}")
+    
+    # 如果有图片数据，更新图片字段
+    if image_data is not None and len(image_data) > 0:
+        # 更新提醒信息（包括图片）
+        update_query = """
+        UPDATE reminders 
+        SET course = %s, 
+            content = %s, 
+            start_time = %s, 
+            deadline = %s, 
+            difficulty = %s,
+            image_url = %s,
+            image_data = %s,
+            image_type = %s
+        WHERE id = %s
+        """
+        
+        params = (
+            req.homework.course,
+            req.homework.content,
+            req.homework.start_time,
+            req.homework.deadline,
+            req.homework.difficulty,
+            req.homework.image_url if hasattr(req.homework, 'image_url') else None,
+            image_data,
+            image_type,
+            reminder_id
+        )
+        logger.info(f"更新提醒（包含图片）: 图片大小={len(image_data)} bytes, 将执行SQL更新")
+    else:
+        # 更新提醒信息（不包括图片）
+        update_query = """
+        UPDATE reminders 
+        SET course = %s, 
+            content = %s, 
+            start_time = %s, 
+            deadline = %s, 
+            difficulty = %s,
+            image_url = %s
+        WHERE id = %s
+        """
+        
+        params = (
+            req.homework.course,
+            req.homework.content,
+            req.homework.start_time,
+            req.homework.deadline,
+            req.homework.difficulty,
+            req.homework.image_url if hasattr(req.homework, 'image_url') else None,
+            reminder_id
+        )
+        logger.info(f"更新提醒（不包含图片）: image_data={'空' if image_data is None else '空字节串' if len(image_data) == 0 else '有数据'}, 将执行SQL更新")
     
     try:
         rowcount = db_config.execute_query(update_query, params)
